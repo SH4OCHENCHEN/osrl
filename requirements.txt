@@ -1,0 +1,38 @@
+# COMVA runtime dependencies.
+#
+# Recommended Anaconda setup:
+#   conda create -n comva python=3.10 -y
+#   conda activate comva
+#   conda install pytorch pytorch-cuda=12.1 -c pytorch -c nvidia
+#   pip install -r requirements.txt
+#
+# If you use CPU only:
+#   conda install pytorch cpuonly -c pytorch
+
+# Core numerical / training stack
+numpy>=1.23
+pandas>=1.5
+matplotlib>=3.7
+tqdm>=4.65
+loguru>=0.7
+wandb>=0.15
+
+# Environments and offline RL datasets
+gymnasium>=0.29
+gym==0.23.1
+dsrl
+
+# Plotting and representation analysis tools
+scikit-learn>=1.2
+umap-learn>=0.5
+
+# Optional packages for local custom environments.
+# Install these only if you use the corresponding utils/environments modules.
+# mujoco>=2.3
+# mujoco-py==2.1.2.14
+# metadrive-simulator
+# bullet-safety-gym
+#
+# The code imports `diffuser.environments.wrappers` in several legacy custom
+# environments. Install your local/third-party `diffuser` package if you need
+# those environments.

@@ -1,0 +1,68 @@
+# Python caches and build artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+build/
+dist/
+*.egg-info/
+
+# Local IDE/editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Conda / virtual environments
+.conda/
+.venv/
+venv/
+env/
+ENV/
+
+# Project training outputs
+artifacts/
+wandb/
+
+# Legacy output locations kept for compatibility with older commands
+/rebuttal_runs/
+/training_curve/
+/tmux_logs/
+/runs/
+/logs/
+/log/
+/results/
+/result/
+/outputs/
+/output/
+/videos/
+
+# Root-level model/checkpoint folders only.
+# Do not ignore agents/**/models, which contains source code.
+/models/
+/model/
+/checkpoints/
+/checkpoint/
+/checkpoint_models/
+/best_models/
+
+# Common generated files
+*.log
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.onnx
+*.npy
+*.npz
+*.pkl
+*.pickle
+*.csv
+
+# OS noise
+.DS_Store
+Thumbs.db
