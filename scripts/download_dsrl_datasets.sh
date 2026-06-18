@@ -10,6 +10,7 @@ HF_ENDPOINT="${HF_ENDPOINT:-https://hf-mirror.com}"
 DATASET_DIR="${DATASET_DIR:-${HOME}/.dsrl/datasets}"
 
 cd "$PROJECT_ROOT"
+export PYTHONPATH="${PROJECT_ROOT}${PYTHONPATH:+:${PYTHONPATH}}"
 
 exec "$PYTHON_BIN" "${SCRIPT_DIR}/download_dsrl_datasets.py" \
   --repo-id "$HF_DATASET_REPO" \
