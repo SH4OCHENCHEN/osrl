@@ -1,5 +1,5 @@
 # %% Part 0 Package import
-import os.path
+import os
 import sys
 
 # from gymnasium.wrappers import RecordVideo
@@ -250,6 +250,8 @@ def train_baseline(args):
     # import gymnasium as gym
     saving_model = args.save_model
     saving_logwriter = args.wandb
+    if not saving_logwriter:
+        os.environ.setdefault("WANDB_MODE", "disabled")
     seed = args.seed
     device = torch.device(args.device)
     torch_compile_enabled = resolve_compile_enabled(args.torch_compile, device)

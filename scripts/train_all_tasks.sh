@@ -30,6 +30,10 @@ SAVE_MODEL="${SAVE_MODEL:-0}"
 USE_WANDB="${USE_WANDB:-0}"
 FINAL_TEST="${FINAL_TEST:-0}"
 
+if [[ "$USE_WANDB" != "1" ]]; then
+  export WANDB_MODE="${WANDB_MODE:-disabled}"
+fi
+
 mkdir -p "$OUT_ROOT" "$LOG_DIR"
 
 common_args=(
