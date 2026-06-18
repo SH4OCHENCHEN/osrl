@@ -19,10 +19,10 @@ import umap
 from sklearn.preprocessing import StandardScaler
 
 from agents.fisor_2024.config import FISOR_config, update_config
-from agents.fisor_2024.agent import FISOR, FISORV1, FISORV2, FISORV3, FLOWCHUNK, FLOWCHUNKV1,\
-    FLOWCHUNKWL, FLOWCHUNKWLN, FLOWCHUNKZS, FLOWCHUNKNF, FLOWNFS, FLOWCHUNKNFS
+from agents.fisor_2024.agent import FISOR, FISORV1, FLOWNFS, FLOWNFSW, FLOWNFWF, FLOWNFSFEASI
 
 from utils.Buffer import data_buffer
+from utils.datasets import ensure_dsrl_dataset
 from utils.seed import setup_seed, seed_env
 from utils.Evaluation import eval_policy
 
@@ -64,16 +64,10 @@ def initialize_policy(algo, buffer, device, config):
     policy_mapping = {
         "FISOR": FISOR,
         "FISORV1": FISORV1,
-        "FISORV2": FISORV2,
-        "FISORV3": FISORV3,
-        "FLOWCHUNK": FLOWCHUNK,
-        "FLOWCHUNKV1": FLOWCHUNKV1,
-        "FLOWCHUNKWL": FLOWCHUNKWL,
-        "FLOWCHUNKWLN": FLOWCHUNKWLN,
-        "FLOWCHUNKZS": FLOWCHUNKZS,
-        "FLOWCHUNKNF": FLOWCHUNKNF,
         "FLOWNFS": FLOWNFS,
-        "FLOWCHUNKNFS": FLOWCHUNKNFS
+        "FLOWNFSW": FLOWNFSW,
+        "FLOWNFWF": FLOWNFWF,
+        "FLOWNFSFEASI": FLOWNFSFEASI,
     }
 
     if algo not in policy_mapping:
@@ -193,7 +187,7 @@ def plot_training_curves(eval_rewards, eval_costs, curve_path, setting):
 
 
 def umap_visualize(args):
-    env_name = 'OfflineDroneRun'
+    env_name = args.env_name
     saving_model = args.not_saving_model
     device = torch.device('cuda')
 
@@ -206,20 +200,22 @@ def umap_visualize(args):
     config = update_config(env_name, config)
 
     env = gym.make(env_name)
+    ensure_dsrl_dataset(env)
     dataset = env.get_dataset()
     logger.info(f"Loaded {len(dataset['rewards'])} transitions from dataset")
 
     buffer = data_buffer(dataset, device, dataset_reward_tune, config["normalize"])
     print("DSRL Markov datasets loaded successfully")
 
-    policy1 = initialize_policy('FLOWCHUNKWLN', buffer, device, config)
-    policy2 = initialize_policy('FLOWNFS', buffer, device, config)
-    # policy2.load_model('artifacts/fisor_2024/checkpoint_models/FLOWNFS_OfflineBallRun_seed3036_checkpoint0')
-    # policy1.load_model('artifacts/fisor_2024/checkpoint_models/FLOWCHUNKWLN_OfflineBallRun_123_checkpoint0')
-    policy2.load_model('artifacts/fisor_2024/checkpoint_models/FLOWNFS_OfflineDroneRun_seed7282_checkpoint0')
-    policy1.load_model('artifacts/fisor_2024/checkpoint_models/FLOWCHUNKWLN_OfflineDroneRun_123_checkpoint0')
+    policy1 = initialize_policy(args.policy1, buffer, device, config)
+    policy2 = initialize_policy(args.policy2, buffer, device, config)
+    if args.model1_path:
+        policy1.load_model(args.model1_path)
+    if args.model2_path:
+        policy2.load_model(args.model2_path)
 
-    indices = np.random.choice(buffer.obs.shape[0], size=5000, replace=False)
+    sample_size = min(args.sample_size, buffer.obs.shape[0])
+    indices = np.random.choice(buffer.obs.shape[0], size=sample_size, replace=False)
     obs = buffer.obs[indices].to(device)
     vr = policy1.get_vr(obs).detach().cpu().numpy()
     vc = policy1.get_vc(obs).detach().cpu().numpy()
@@ -340,13 +336,11 @@ def create_umap_visualization(obs_, vr, vc, cvr, save_path=None, figsize=(24, 8)
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--not_saving_model", action="store_false", default=True)
-    parser.add_argument("--env_name", type=str, default="DroneRun")
-    parser.add_argument("--policy1", type=str, default="FLOWCHUNKWL")
+    parser.add_argument("--env_name", type=str, default="OfflineDroneRun")
+    parser.add_argument("--policy1", type=str, default="FISORV1")
     parser.add_argument("--policy2", type=str, default="FLOWNFS")
-    parser.add_argument("--model1_path", type=str,
-                        default="artifacts/fisor_2024/checkpoint_models/FLOWCHUNKWL_OfflineDroneRun_123_checkpoint0")
-    parser.add_argument("--model2_path", type=str,
-                        default="artifacts/fisor_2024/checkpoint_models/FLOWNFS_OfflineDroneRun_seed7558_checkpoint0")
+    parser.add_argument("--model1_path", type=str, default=None)
+    parser.add_argument("--model2_path", type=str, default=None)
     parser.add_argument("--sample_size", type=int, default=5000)
     parser.add_argument("--save_dir", type=str, default="dataset_distribution")
     parser.add_argument("--seed", type=int, default=42)

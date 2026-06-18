@@ -21,6 +21,7 @@ wandb>=0.15
 gymnasium>=0.29
 gym==0.23.1
 dsrl
+huggingface-hub>=0.20
 
 # Plotting and representation analysis tools
 scikit-learn>=1.2

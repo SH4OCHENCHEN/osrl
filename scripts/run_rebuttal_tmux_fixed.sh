@@ -12,6 +12,10 @@ LOG_DIR="${LOG_DIR:-${PROJECT_ROOT}/artifacts/tmux_logs}"
 SAVE_MODEL="${SAVE_MODEL:-0}"
 USE_WANDB="${USE_WANDB:-0}"
 FINAL_TEST="${FINAL_TEST:-0}"
+DATASET_DOWNLOAD="${DATASET_DOWNLOAD:-auto}"
+HF_DATASET_REPO="${HF_DATASET_REPO:-YYY-45/DSRL}"
+HF_ENDPOINT="${HF_ENDPOINT:-https://hf-mirror.com}"
+DATASET_DIR="${DATASET_DIR:-}"
 
 if [[ "$USE_WANDB" != "1" ]]; then
   export WANDB_MODE="${WANDB_MODE:-disabled}"
@@ -30,6 +34,7 @@ if [[ "${1:-}" != "--inside-tmux" ]]; then
   fi
 
   export SESSION_NAME PYTHON_BIN SCRIPT_DIR PROJECT_ROOT TRAIN_SCRIPT DEVICE OUT_ROOT LOG_DIR SAVE_MODEL USE_WANDB FINAL_TEST
+  export DATASET_DOWNLOAD HF_DATASET_REPO HF_ENDPOINT DATASET_DIR
   export ENVS_STR="${ENVS_STR:-${ENVS_DEFAULT[*]}}"
   export SEEDS_STR="${SEEDS_STR:-${SEEDS_DEFAULT[*]}}"
   export OMEGAS_STR="${OMEGAS_STR:-${OMEGAS_DEFAULT[*]}}"
@@ -88,7 +93,16 @@ run_one() {
   echo
 }
 
-common_args=(--device "$DEVICE" --output-root "$OUT_ROOT")
+common_args=(
+  --device "$DEVICE"
+  --output-root "$OUT_ROOT"
+  --dataset-download "$DATASET_DOWNLOAD"
+  --hf-dataset-repo "$HF_DATASET_REPO"
+  --hf-endpoint "$HF_ENDPOINT"
+)
+if [[ -n "$DATASET_DIR" ]]; then
+  common_args+=(--dataset-dir "$DATASET_DIR")
+fi
 if [[ "$SAVE_MODEL" == "1" ]]; then
   common_args+=(--save-model)
 fi
@@ -109,6 +123,9 @@ echo "Envs         : ${ENVS[*]}"
 echo "Seeds        : ${SEEDS[*]}"
 echo "Omegas       : ${OMEGAS[*]}"
 echo "Chunks       : ${CHUNKS[*]}"
+echo "Dataset mode : $DATASET_DOWNLOAD"
+echo "HF repo      : $HF_DATASET_REPO"
+echo "HF endpoint  : ${HF_ENDPOINT:-<official>}"
 echo
 
 # for env in "${ENVS[@]}"; do
@@ -129,9 +146,9 @@ echo
 for env in "${ENVS[@]}"; do
   for seed in "${SEEDS[@]}"; do
     for h in "${CHUNKS[@]}"; do
-      run_name="FLOWNFGAU_${env}_seed${seed}_h${h}"
+      run_name="FLOWNFS_${env}_seed${seed}_h${h}"
       run_one "$run_name" \
-        --algo FLOWNFSW \
+        --algo FLOWNFS \
         --env_name "$env" \
         --seed "$seed" \
         --run-name "$run_name" \

@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 # 加载NPY文件
-data = np.load('artifacts/fisor_2024/results/FLOWCHUNK_OfflineCarGoal1_123_costs.npy', allow_pickle=True)  # 替换为你的文件路径
+data = np.load('artifacts/fisor_2024/results/FLOWNFS_OfflineCarGoal1_seed0_costs.npy', allow_pickle=True)  # 替换为你的文件路径
 
 # 确保数据是二维数组形式（多个列表的列表）
 if data.ndim == 1:

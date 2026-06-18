@@ -16,10 +16,10 @@ import argparse
 from tqdm import trange
 
 from agents.fisor_2024.config import FISOR_config, update_config
-from agents.fisor_2024.agent import FISOR, FISORV1, FISORV2, FISORV3, FLOWCHUNK, FLOWCHUNKV1,\
-    FLOWCHUNKWL, FLOWCHUNKWLN, FLOWCHUNKZS, FLOWCHUNKNF, FLOWNFS, FLOWNFSW, FLOWNFWF, FLOWCHUNKNFS, FLOWNFSFEASI
+from agents.fisor_2024.agent import FISOR, FISORV1, FLOWNFS, FLOWNFSW, FLOWNFWF, FLOWNFSFEASI
 
 from utils.Buffer import data_buffer
+from utils.datasets import ensure_dsrl_dataset
 from utils.seed import setup_seed, seed_env
 from utils.Evaluation import eval_policy
 from utils.torch_acceleration import (
@@ -99,18 +99,9 @@ def initialize_policy(algo, buffer, device, config):
     policy_mapping = {
         "FISOR": FISOR,
         "FISORV1": FISORV1,
-        "FISORV2": FISORV2,
-        "FISORV3": FISORV3,
-        "FLOWCHUNK": FLOWCHUNK,
-        "FLOWCHUNKV1": FLOWCHUNKV1,
-        "FLOWCHUNKWL": FLOWCHUNKWL,
-        "FLOWCHUNKWLN": FLOWCHUNKWLN,
-        "FLOWCHUNKZS": FLOWCHUNKZS,
-        "FLOWCHUNKNF": FLOWCHUNKNF,
         "FLOWNFS": FLOWNFS,
         "FLOWNFSW": FLOWNFSW,
         "FLOWNFWF": FLOWNFWF,
-        "FLOWCHUNKNFS": FLOWCHUNKNFS,
         "FLOWNFSFEASI": FLOWNFSFEASI
     }
 
@@ -303,6 +294,13 @@ def train_baseline(args):
     print("Setting up environment and loading dataset...")
 
     env = gym.make(env_name)
+    ensure_dsrl_dataset(
+        env,
+        download=args.dataset_download,
+        repo_id=args.hf_dataset_repo,
+        endpoint=args.hf_endpoint,
+        local_dir=args.dataset_dir,
+    )
     dataset = env.get_dataset()
     logger.info(f"Loaded {len(dataset['rewards'])} transitions from dataset")
 
@@ -323,7 +321,7 @@ def train_baseline(args):
     # ==================== PART 3: WANDB & POLICY INITIALIZATION ====================
     if saving_logwriter:
         wandb.init(
-            project="FLOWCHUNK",
+            project="COMVA",
             group=env_name0,
             config=config,
             tags=[env_name, f"seed{seed}"],
@@ -579,6 +577,13 @@ if __name__ == "__main__":
     parser.add_argument('--batch-size', default=None, type=int)
     parser.add_argument('--eval-episode', default=20, type=int)
     parser.add_argument('--target-cost', default=None, type=float)
+    parser.add_argument('--dataset-download', default='auto', choices=['auto', 'hf', 'off'],
+                        help='Download missing DSRL datasets before env.get_dataset().')
+    parser.add_argument('--hf-dataset-repo', default='YYY-45/DSRL', type=str)
+    parser.add_argument('--hf-endpoint', default='https://hf-mirror.com', type=str,
+                        help='Hugging Face endpoint; use an empty string for the official endpoint.')
+    parser.add_argument('--dataset-dir', default=None, type=str,
+                        help='Dataset cache directory. Defaults to ~/.dsrl/datasets.')
     parser.add_argument('--save-model', dest='save_model', action='store_true')
     parser.add_argument('--wandb', dest='wandb', action='store_true')
     parser.add_argument('--final-test', action='store_true')

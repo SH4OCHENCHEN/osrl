@@ -9,7 +9,7 @@ TRAIN_SCRIPT="${TRAIN_SCRIPT:-${PROJECT_ROOT}/main.py}"
 OUT_ROOT="${OUT_ROOT:-${PROJECT_ROOT}/artifacts/rebuttal_runs}"
 LOG_DIR="${LOG_DIR:-${PROJECT_ROOT}/artifacts/logs}"
 
-ALGO="${ALGO:-FLOWNFSW}"
+ALGO="${ALGO:-FLOWNFS}"
 DEVICE="${DEVICE:-cuda:0}"
 SEEDS=(${SEEDS_STR:-0})
 TASKS=(${TASKS_STR:-OfflineCarGoal1 OfflineCarGoal2 OfflinePointGoal1 OfflinePointGoal2 OfflineCarButton1 OfflineCarButton2 OfflinePointButton1 OfflinePointButton2 OfflineCarPush1 OfflineCarPush2 OfflinePointPush1 OfflinePointPush2 OfflineCarRun OfflineAntRun OfflineDroneRun OfflineCarCircle OfflineDroneCircle OfflineAntCircle OfflineBallCircle OfflineBallRun})
@@ -21,6 +21,10 @@ EVAL_FREQ="${EVAL_FREQ:-}"
 BATCH_SIZE="${BATCH_SIZE:-}"
 TARGET_COST="${TARGET_COST:-5}"
 EVAL_EPISODE="${EVAL_EPISODE:-20}"
+DATASET_DOWNLOAD="${DATASET_DOWNLOAD:-auto}"
+HF_DATASET_REPO="${HF_DATASET_REPO:-YYY-45/DSRL}"
+HF_ENDPOINT="${HF_ENDPOINT:-https://hf-mirror.com}"
+DATASET_DIR="${DATASET_DIR:-}"
 
 TORCH_COMPILE="${TORCH_COMPILE:-auto}"
 COMPILE_MODE="${COMPILE_MODE:-reduce-overhead}"
@@ -42,6 +46,9 @@ common_args=(
   --output-root "$OUT_ROOT"
   --target-cost "$TARGET_COST"
   --eval-episode "$EVAL_EPISODE"
+  --dataset-download "$DATASET_DOWNLOAD"
+  --hf-dataset-repo "$HF_DATASET_REPO"
+  --hf-endpoint "$HF_ENDPOINT"
   --torch-compile "$TORCH_COMPILE"
   --compile-mode "$COMPILE_MODE"
   --matmul-precision "$MATMUL_PRECISION"
@@ -50,6 +57,7 @@ common_args=(
 [[ -n "$MAX_TIMESTEP" ]] && common_args+=(--max-timestep "$MAX_TIMESTEP")
 [[ -n "$EVAL_FREQ" ]] && common_args+=(--eval-freq "$EVAL_FREQ")
 [[ -n "$BATCH_SIZE" ]] && common_args+=(--batch-size "$BATCH_SIZE")
+[[ -n "$DATASET_DIR" ]] && common_args+=(--dataset-dir "$DATASET_DIR")
 [[ "$SAVE_MODEL" == "1" ]] && common_args+=(--save-model)
 [[ "$USE_WANDB" == "1" ]] && common_args+=(--wandb)
 [[ "$FINAL_TEST" == "1" ]] && common_args+=(--final-test)
@@ -88,6 +96,9 @@ echo "Tasks        : ${TASKS[*]}"
 echo "Seeds        : ${SEEDS[*]}"
 echo "Chunks       : ${CHUNKING_LENGTHS[*]}"
 echo "CFG values   : ${CFG_GUIDANCES[*]:-<none>}"
+echo "Dataset mode : $DATASET_DOWNLOAD"
+echo "HF repo      : $HF_DATASET_REPO"
+echo "HF endpoint  : ${HF_ENDPOINT:-<official>}"
 echo
 
 for task in "${TASKS[@]}"; do
