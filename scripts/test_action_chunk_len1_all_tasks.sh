@@ -21,4 +21,4 @@ echo "Results: ${OUT_ROOT}"
 echo "Logs   : ${LOG_DIR}"
 echo
 
-exec "${SCRIPT_DIR}/train_all_tasks.sh"
+exec bash "${SCRIPT_DIR}/train_all_tasks.sh"
