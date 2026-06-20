@@ -8,6 +8,52 @@ from tqdm import trange
 
 np.set_printoptions(precision=4, linewidth=300, suppress=True)
 
+
+def _raw_env(env):
+    return getattr(env, "unwrapped", env)
+
+
+def reset_env(env, **kwargs):
+    result = _raw_env(env).reset(**kwargs)
+    if isinstance(result, tuple) and len(result) == 2 and isinstance(result[1], dict):
+        return result
+    return result, {}
+
+
+def _is_bool_like(value):
+    return isinstance(value, (bool, np.bool_))
+
+
+def step_env(env, action):
+    result = _raw_env(env).step(action)
+    if not isinstance(result, tuple):
+        raise TypeError(f"Expected env.step() to return a tuple, got {type(result)!r}")
+
+    if len(result) == 4:
+        obs, reward, done, info = result
+        return obs, reward, bool(done), False, info
+
+    if len(result) == 5:
+        obs, reward, terminated, truncated, info = result
+        return obs, reward, bool(terminated), bool(truncated), info
+
+    if len(result) == 6:
+        obs, reward = result[0], result[1]
+        info = result[-1] if isinstance(result[-1], dict) else {}
+
+        if _is_bool_like(result[2]) and _is_bool_like(result[3]):
+            terminated, truncated, cost = result[2], result[3], result[4]
+        else:
+            cost, terminated, truncated = result[2], result[3], result[4]
+
+        if "cost" not in info and np.isscalar(cost):
+            info = dict(info)
+            info["cost"] = float(cost)
+        return obs, reward, bool(terminated), bool(truncated), info
+
+    raise ValueError(f"Unsupported env.step() return length: {len(result)}")
+
+
 # %% Part 1 Markovian Based Policy Evaluation with no DMBP
 def eval_policy(policy, eval_env, eval_episodes=10):
     reward_buffer = []
@@ -16,12 +62,13 @@ def eval_policy(policy, eval_env, eval_episodes=10):
     for _ in range(eval_episodes):
         reward_ep = 0.
         cost_ep = 0.
-        state, done, truncated = eval_env.reset()[0], False, False
+        state, _ = reset_env(eval_env)
+        done, truncated = False, False
         cost_thre = 5
         while not (done or truncated):
 
             action = policy.select_action_from_candidates(np.array(state))
-            state, reward, done, truncated, info = eval_env.step(action)
+            state, reward, done, truncated, info = step_env(eval_env, action)
 
             reward_ep += reward
             if 'cost_hazards' in info:
@@ -857,4 +904,3 @@ def evaluate_DT_rtg(
 #             break
 #
 #     return episode_return, episode_length
-

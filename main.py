@@ -21,7 +21,7 @@ from agents.fisor_2024.agent import FISOR, FISORV1, FLOWNFS, FLOWNFSW, FLOWNFWF,
 from utils.Buffer import data_buffer
 from utils.datasets import ensure_dsrl_dataset
 from utils.seed import setup_seed, seed_env
-from utils.Evaluation import eval_policy
+from utils.Evaluation import eval_policy, reset_env, step_env
 from utils.torch_acceleration import (
     compile_policy_modules,
     configure_matmul_precision,
@@ -110,6 +110,12 @@ def initialize_policy(algo, buffer, device, config):
 
     policy_class = policy_mapping[algo]
     return policy_class(buffer.obs_dim, buffer.act_dim, buffer.max_action, device, config)
+
+
+def set_env_target_cost(env, target_cost):
+    for target in (env, getattr(env, "unwrapped", None)):
+        if target is not None and hasattr(target, "set_target_cost"):
+            target.set_target_cost(target_cost)
 
 
 def log_evaluation_results(eval_results, gradient_step, saving_logwriter):
@@ -308,7 +314,7 @@ def train_baseline(args):
     print("DSRL Markov datasets loaded successfully")
 
     eval_env = gym.make(env_name)
-    eval_env.set_target_cost(args.target_cost if args.target_cost is not None else config['cost_limit'])
+    set_env_target_cost(eval_env, args.target_cost if args.target_cost is not None else config['cost_limit'])
     seed_env(eval_env, seed)
     # eval_env = RecordVideo(
     #     eval_env,
@@ -519,10 +525,10 @@ def test_final_model(policy, env_name, config, test_episodes=100):
     for i in range(test_episodes//20):
         # Create environment with random seed for each episode
         test_env = gym.make(env_name)
-        test_env.set_target_cost(config.get('target_cost', config['cost_limit']))
+        set_env_target_cost(test_env, config.get('target_cost', config['cost_limit']))
         for ep in range(20):
             # Run one episode
-            obs, _ = test_env.reset()
+            obs, _ = reset_env(test_env)
             done, truncated = False, False
             episode_reward = 0
             episode_cost = 0
@@ -533,7 +539,8 @@ def test_final_model(policy, env_name, config, test_episodes=100):
                 action = policy.select_action_from_candidates(obs, eval=True)
 
                 # Take action
-                obs, reward, terminated, truncated, info = test_env.step(action)
+                obs, reward, terminated, truncated, info = step_env(test_env, action)
+                done = terminated
                 episode_reward += reward
                 if 'cost_hazards' in info:
                     episode_cost += info['cost_hazards']

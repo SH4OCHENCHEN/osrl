@@ -3,8 +3,13 @@
 # Recommended Anaconda setup:
 #   conda create -n comva python=3.10 -y
 #   conda activate comva
-#   conda install pytorch pytorch-cuda=12.1 -c pytorch -c nvidia
+#   # Your driver reports CUDA driver API 12.8, so avoid cu129/cu130 PyTorch.
+#   # Recommended inside the conda env:
+#   pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
 #   pip install -r requirements.txt
+#
+# Conda-only fallback if pip wheels are inconvenient:
+#   conda install pytorch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1 pytorch-cuda=12.4 -c pytorch -c nvidia
 #
 # If you use CPU only:
 #   conda install pytorch cpuonly -c pytorch
