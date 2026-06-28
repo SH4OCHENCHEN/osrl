@@ -1,6 +1,9 @@
 # %% Part 0 Package import
 import os
 import sys
+import csv
+import json
+from copy import deepcopy
 
 # from gymnasium.wrappers import RecordVideo
 import dsrl.offline_metadrive
@@ -77,9 +80,12 @@ def setup_directories(path_head, setting):
     """Create necessary directories and return file paths"""
     directories = [
         f"{path_head}results",
-        f"{path_head}best_models",
-        f"{path_head}checkpoint_models",
-        f"artifacts/training_curve/{setting}"
+        f"{path_head}models/best",
+        f"{path_head}models/checkpoints",
+        f"{path_head}configs",
+        f"{path_head}train_csv",
+        f"{path_head}test_csv",
+        f"{path_head}curves/{setting}",
     ]
 
     for directory in directories:
@@ -88,10 +94,59 @@ def setup_directories(path_head, setting):
 
     return {
         'eval': f"{path_head}results/{setting}",
-        'best_model': f"{path_head}best_models/{setting}",
-        'checkpoint': f"{path_head}checkpoint_models/{setting}",
-        'curve': f"artifacts/training_curve/{setting}"
+        'best_model': f"{path_head}models/best/{setting}",
+        'checkpoint': f"{path_head}models/checkpoints/{setting}",
+        'curve': f"{path_head}curves/{setting}",
+        'config': f"{path_head}configs/{setting}.json",
+        'train_summary_csv': f"{path_head}train_csv/{setting}_eval_summary.csv",
+        'train_episodes_csv': f"{path_head}train_csv/{setting}_eval_episodes.csv",
+        'test_summary_csv': f"{path_head}test_csv/{setting}_final_summary.csv",
+        'test_episodes_csv': f"{path_head}test_csv/{setting}_final_episodes.csv",
     }
+
+
+def _csv_value(value):
+    if isinstance(value, torch.Tensor):
+        value = value.detach().cpu()
+        if value.numel() == 1:
+            return value.item()
+        return json.dumps(value.tolist())
+    if isinstance(value, np.ndarray):
+        if value.size == 1:
+            return value.item()
+        return json.dumps(value.tolist())
+    if isinstance(value, np.generic):
+        return value.item()
+    if isinstance(value, (list, tuple, dict)):
+        return json.dumps(value)
+    return value
+
+
+def append_csv_rows(file_path, rows, fieldnames):
+    if not rows:
+        return
+
+    file_exists = os.path.exists(file_path) and os.path.getsize(file_path) > 0
+    with open(file_path, "a", newline="", encoding="utf-8") as csv_file:
+        writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
+        if not file_exists:
+            writer.writeheader()
+        for row in rows:
+            writer.writerow({name: _csv_value(row.get(name, "")) for name in fieldnames})
+
+
+def save_config_snapshot(path, config, args, env_name):
+    snapshot = {
+        "env_name": args.env_name,
+        "resolved_env_name": env_name,
+        "algo": args.algo,
+        "seed": args.seed,
+        "run_name": args.run_name,
+        "args": vars(args),
+        "config": config,
+    }
+    with open(path, "w", encoding="utf-8") as config_file:
+        json.dump(snapshot, config_file, indent=2, sort_keys=True)
 
 
 def initialize_policy(algo, buffer, device, config):
@@ -270,7 +325,7 @@ def train_baseline(args):
     dataset_reward_tune = 'no'
     env_name = get_env_name(env_name0)
 
-    config = FISOR_config
+    config = deepcopy(FISOR_config)
     config = update_config(env_name0, config)
     if args.chunking_length is not None:
         config["chunking_length"] = int(args.chunking_length)
@@ -286,12 +341,19 @@ def train_baseline(args):
             config[key] = guidance_value
     if args.target_cost is not None:
         config["target_cost"] = float(args.target_cost)
+    if args.safe_portion is not None:
+        config["safe_portion"] = float(args.safe_portion)
 
     setting = args.run_name or f"{algo}_{env_name0}_seed{seed}"
     eval_freq = int(config['eval_freq'])
     max_timestep = int(config['max_timestep'])
     checkpoint_start = config["checkpoint_start"]
     checkpoint_every = config["checkpoint_every"]
+    path_head = args.output_root.rstrip("/\\") + "/"
+    paths = setup_directories(path_head, setting)
+    save_config_snapshot(paths['config'], config, args, env_name)
+    print(f"Experiment files will be saved under: {path_head}")
+    print(f"Effective safe_portion: {config['safe_portion']}")
 
     setup_seed(seed)
     print(f"Random seed set to {seed}")
@@ -322,7 +384,7 @@ def train_baseline(args):
     #     episode_trigger=lambda episode_id: True,  # 每个 episode 都录制
     #     name_prefix="safety_point_goal_episode"
     # )
-    print("Evaluation environment configured with target cost = 10")
+    print(f"Evaluation environment configured with target cost = {config.get('target_cost', config['cost_limit'])}")
 
     # ==================== PART 3: WANDB & POLICY INITIALIZATION ====================
     if saving_logwriter:
@@ -348,11 +410,9 @@ def train_baseline(args):
     print("Policy initialized successfully")
 
     # ==================== PART 4: DIRECTORY SETUP ====================
-    path_head = args.output_root.rstrip("/\\") + "/"
-    paths = setup_directories(path_head, setting)
     print(f"Directories created for experiment: {setting}")
 
-    # policy.load_model(path_head+"best_models/FLOWNFS_OfflineCarGoal1_seed7832")
+    # policy.load_model(path_head+"models/best/FLOWNFS_OfflineCarGoal1_seed7832")
 
     # ==================== PART 5: TRAINING LOOP ====================
     print("=" * 60)
@@ -441,6 +501,59 @@ def train_baseline(args):
         eval_rewards.append(reward_buffer)
         eval_costs.append(cost_buffer)
 
+        eval_index = len(eval_rewards)
+        train_summary_fields = [
+            "setting", "algo", "env_name", "resolved_env_name", "seed",
+            "safe_portion", "target_cost", "eval_index", "total_train",
+            "gradient_step", "reward_mean", "reward_std", "reward_max",
+            "reward_min", "cost_mean", "cost_std", "cost_max", "cost_min",
+            "best_reward", "best_cost", "best_step", "model_updated",
+        ]
+        append_csv_rows(paths['train_summary_csv'], [{
+            "setting": setting,
+            "algo": algo,
+            "env_name": env_name0,
+            "resolved_env_name": env_name,
+            "seed": seed,
+            "safe_portion": config["safe_portion"],
+            "target_cost": config.get("target_cost", config["cost_limit"]),
+            "eval_index": eval_index,
+            "total_train": total_train,
+            "gradient_step": gradient_step,
+            "reward_mean": avg_reward,
+            "reward_std": std_reward,
+            "reward_max": max_reward,
+            "reward_min": min_reward,
+            "cost_mean": avg_cost,
+            "cost_std": std_cost,
+            "cost_max": max_cost,
+            "cost_min": min_cost,
+            "best_reward": best_reward,
+            "best_cost": best_cost,
+            "best_step": best_idx,
+            "model_updated": model_updated,
+        }], train_summary_fields)
+
+        train_episode_fields = [
+            "setting", "algo", "env_name", "resolved_env_name", "seed",
+            "safe_portion", "eval_index", "episode_index", "total_train",
+            "gradient_step", "reward", "cost",
+        ]
+        append_csv_rows(paths['train_episodes_csv'], [{
+            "setting": setting,
+            "algo": algo,
+            "env_name": env_name0,
+            "resolved_env_name": env_name,
+            "seed": seed,
+            "safe_portion": config["safe_portion"],
+            "eval_index": eval_index,
+            "episode_index": episode_index,
+            "total_train": total_train,
+            "gradient_step": gradient_step,
+            "reward": reward,
+            "cost": cost,
+        } for episode_index, (reward, cost) in enumerate(zip(reward_buffer, cost_buffer), start=1)], train_episode_fields)
+
         # Save evaluation data
         if saving_model:
             # Load existing data if files exist, otherwise start with empty lists
@@ -491,17 +604,58 @@ def train_baseline(args):
         )
         print("Best model loaded successfully")
 
-        # Test for 100 episodes with random seeds
-        test_episodes = 60
+        # Test the best checkpoint after training.
+        test_episodes = args.test_episodes
         print(f"Running {test_episodes} test episodes with random seeds...")
 
         final_reward_buffer, final_cost_buffer = test_final_model(
             test_policy, env_name, config, test_episodes
         )
 
+        test_episode_fields = [
+            "setting", "algo", "env_name", "resolved_env_name", "seed",
+            "safe_portion", "episode_index", "reward", "cost",
+        ]
+        append_csv_rows(paths['test_episodes_csv'], [{
+            "setting": setting,
+            "algo": algo,
+            "env_name": env_name0,
+            "resolved_env_name": env_name,
+            "seed": seed,
+            "safe_portion": config["safe_portion"],
+            "episode_index": episode_index,
+            "reward": reward,
+            "cost": cost,
+        } for episode_index, (reward, cost) in enumerate(zip(final_reward_buffer, final_cost_buffer), start=1)], test_episode_fields)
+
+        test_summary_fields = [
+            "setting", "algo", "env_name", "resolved_env_name", "seed",
+            "safe_portion", "test_episodes", "reward_mean", "reward_std",
+            "reward_max", "reward_min", "cost_mean", "cost_std", "cost_max",
+            "cost_min", "best_step",
+        ]
+        append_csv_rows(paths['test_summary_csv'], [{
+            "setting": setting,
+            "algo": algo,
+            "env_name": env_name0,
+            "resolved_env_name": env_name,
+            "seed": seed,
+            "safe_portion": config["safe_portion"],
+            "test_episodes": test_episodes,
+            "reward_mean": np.mean(final_reward_buffer),
+            "reward_std": np.std(final_reward_buffer),
+            "reward_max": np.max(final_reward_buffer),
+            "reward_min": np.min(final_reward_buffer),
+            "cost_mean": np.mean(final_cost_buffer),
+            "cost_std": np.std(final_cost_buffer),
+            "cost_max": np.max(final_cost_buffer),
+            "cost_min": np.min(final_cost_buffer),
+            "best_step": best_idx,
+        }], test_summary_fields)
+
         # Log final test results
         logger.info("=" * 40)
-        logger.info("FINAL MODEL TEST RESULTS (100 episodes with random seeds):")
+        logger.info(f"FINAL MODEL TEST RESULTS ({test_episodes} episodes with random seeds):")
         logger.info("=" * 40)
         logger.info(f"Final Test Reward: {np.mean(final_reward_buffer):.2f} STD: {np.std(final_reward_buffer):.2f}")
         logger.info(f"   Range: [{np.min(final_reward_buffer):.2f}, {np.max(final_reward_buffer):.2f}]")
@@ -522,11 +676,11 @@ def test_final_model(policy, env_name, config, test_episodes=100):
     final_reward_buffer = []
     final_cost_buffer = []
 
-    for i in range(test_episodes//20):
+    for batch_start in range(0, test_episodes, 20):
         # Create environment with random seed for each episode
         test_env = gym.make(env_name)
         set_env_target_cost(test_env, config.get('target_cost', config['cost_limit']))
-        for ep in range(20):
+        for ep in range(min(20, test_episodes - batch_start)):
             # Run one episode
             obs, _ = reset_env(test_env)
             done, truncated = False, False
@@ -583,7 +737,9 @@ if __name__ == "__main__":
     parser.add_argument('--eval-freq', default=None, type=int)
     parser.add_argument('--batch-size', default=None, type=int)
     parser.add_argument('--eval-episode', default=20, type=int)
+    parser.add_argument('--test-episodes', default=60, type=int)
     parser.add_argument('--target-cost', default=None, type=float)
+    parser.add_argument('--safe-portion', default=None, type=float)
     parser.add_argument('--dataset-download', default='auto', choices=['auto', 'hf', 'off'],
                         help='Download missing DSRL datasets before env.get_dataset().')
     parser.add_argument('--hf-dataset-repo', default='YYY-45/DSRL', type=str)
